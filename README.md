@@ -1,0 +1,3 @@
+# Trispussizeite
+
+PGP, SSH, ED25519, CURVE25519, SECP256K1

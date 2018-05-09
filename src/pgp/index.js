@@ -5,9 +5,9 @@ var fs = Promise.promisifyAll(require('fs'));
 const input_file = '/tmp/temp.input_file';
 const output_file = '/tmp/temp.output_file';
 
-const import_public_keys = public_keys => {
+const import_key = key => {
   return new Promise((resolve, reject) => {
-    gpg.importKeyFromFile(public_keys, (err, result, fingerprint) => {
+    gpg.importKeyFromFile(key, (err, result, fingerprint) => {
       if (err) {
         reject(err);
       } else {
@@ -20,9 +20,9 @@ const import_public_keys = public_keys => {
   });
 };
 
-const gpg_import = async ({ publicKeys, privateKeys, trust }) => {
-  await import_public_keys(publicKeys);
-  await import_public_keys(privateKeys);
+const gpg_import = async ({ publicKey, privateKey, trust }) => {
+  await import_key(publicKey);
+  await import_key(privateKey);
   return gpg;
 };
 
@@ -80,7 +80,7 @@ const decrypt = async ({ passphrase, input_buffer }) => {
   });
 };
 
-const sign = async ({ passphrase, input_buffer }) => {
+const sign = async ({ passphrase, input_buffer, user }) => {
   return new Promise(async (resolve, reject) => {
     let stdinStr = passphrase;
     let argsArray = [
@@ -89,6 +89,8 @@ const sign = async ({ passphrase, input_buffer }) => {
       'loopback',
       '--command-fd',
       '0',
+      '-u',
+      user,
       '--output',
       output_file,
       '--sign',

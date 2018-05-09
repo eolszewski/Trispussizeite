@@ -14,7 +14,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/eolszewski/Trispussizeite.git"
+    "url": "git+https://github.com/eolszewski/trispussizeite.git"
   },
   "keywords": [
     "ssh2",
@@ -26,9 +26,9 @@
   "author": "Eric Olszewski",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/eolszewski/Trispussizeite/issues"
+    "url": "https://github.com/eolszewski/trispussizeite/issues"
   },
-  "homepage": "https://github.com/eolszewski/Trispussizeite#readme",
+  "homepage": "https://github.com/eolszewski/trispussizeite#readme",
   "dependencies": {
     "bip39": "^2.5.0",
     "bluebird": "^3.5.1",

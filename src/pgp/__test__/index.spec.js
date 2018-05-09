@@ -6,9 +6,9 @@ describe('g9g', () => {
 
   beforeAll(async () => {
     let gpg = await g9g.gpg_import({
-      publicKeys: path.join(__dirname, '../../data/public_keys.asc'),
-      privateKeys: path.join(__dirname, '../../data/private_keys.asc'),
-      trust: path.join(__dirname, '../../data/trust.txt')
+      publicKey: path.join(__dirname, '../../../data/public_key.asc'),
+      privateKey: path.join(__dirname, '../../../data/private_key.asc'),
+      trust: path.join(__dirname, '../../../data/trust.txt')
     });
     expect(gpg.call).toBeDefined();
   });
@@ -34,7 +34,8 @@ describe('g9g', () => {
     // console.log('plaintext_buffer: ', plaintext_buffer);
     let signature_buffer = await g9g.sign({
       passphrase,
-      input_buffer: plaintext_buffer
+      input_buffer: plaintext_buffer,
+      user: "Alice"
     });
     // console.log('signature_buffer: ', signature_buffer);
     let verified_signature = await g9g.verify({

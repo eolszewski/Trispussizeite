@@ -1,49 +1,133 @@
+import _sodium from 'libsodium-wrappers';
+import Wallet from 'ethereumjs-wallet';
+import utils from 'ethereumjs-util';
 import path from 'path';
-import g9g from '../index';
+const openpgp = require('openpgp');
+import Promise from 'bluebird';
+const fs = Promise.promisifyAll(require('fs'));
+const elliptic = openpgp.crypto.publicKey.elliptic;
 
-describe('g9g', () => {
-  const passphrase = 'secret';
+const { Console } = require('console');
+global.console = new Console(process.stderr, process.stderr);
 
+import trispussizeite from '../index';
+
+let sodium;
+
+describe('trispussizeite', () => {
+  
   beforeAll(async () => {
-    let gpg = await g9g.gpg_import({
-      publicKey: path.join(__dirname, '../../../data/public_key.asc'),
-      privateKey: path.join(__dirname, '../../../data/private_key.asc'),
-      trust: path.join(__dirname, '../../../data/trust.txt')
-    });
-    expect(gpg.call).toBeDefined();
+    await _sodium.ready;
+    sodium = _sodium;
   });
 
-  it('encrypt + decrypt', async () => {
-    let plaintext_buffer = Buffer.from('Hello ' + new Date().toString());
-    // console.log('plaintext_buffer: ', plaintext_buffer);
-    let encrypted_buffer = await g9g.encrypt({
-      passphrase,
-      input_buffer: plaintext_buffer
-    });
-    // console.log('encrypted_buffer: ', encrypted_buffer);
-    let decrypted_plaintext_buffer = await g9g.decrypt({
-      passphrase,
-      input_buffer: encrypted_buffer
-    });
-    // console.log('decrypted_plaintext_buffer: ', decrypted_plaintext_buffer);
-    expect(decrypted_plaintext_buffer).toEqual(plaintext_buffer);
-  });
+  it('gpg -> openpgp -> web3', async () => {
+    // Retrieve Alice's ED25519 GPG Key
+    const alicePassphrase = 'secret';
+    const alicePrivateKeyArmored = (await fs.readFileAsync(
+      path.join(__dirname, '../../../data/private_key.asc')
+    )).toString();
+    const alice = openpgp.key.readArmored(
+      alicePrivateKeyArmored
+    ).keys[0];
+    await alice.decrypt(alicePassphrase);
+    const alicePrimaryKey = alice.primaryKey;
+    const aliceUser = alice.users[0];
 
-  it('sign + verify', async () => {
-    let plaintext_buffer = Buffer.from('Hello ' + new Date().toString());
-    // console.log('plaintext_buffer: ', plaintext_buffer);
-    let signature_buffer = await g9g.sign({
-      passphrase,
-      input_buffer: plaintext_buffer,
-      user: "Alice"
+    // Self Certificate is valid
+    expect(await aliceUser.selfCertifications[0].verify(
+      alicePrimaryKey, { userid: aliceUser.userId, key: alicePrimaryKey }
+    ));
+    expect(await aliceUser.verifyCertificate(
+      alicePrimaryKey, aliceUser.selfCertifications[0], [alice.toPublic()]
+    )).toEqual(openpgp.enums.keyStatus.valid);
+
+    // Generate and decrypt a new secp256k1 pgp key for Bob
+    const bobPassphrase = 'secp256k1 key';
+    const bobOptions = {
+      userIds: [{ name: 'Bob (secp256k1)', email: 'bob@example.com' }],
+      curve: 'secp256k1',
+      passphrase: bobPassphrase
+    };
+    const bobKey = await openpgp.generateKey(bobOptions);
+    const bob = openpgp.key.readArmored(
+      bobKey.privateKeyArmored
+    ).keys[0];
+    await bob.decrypt(bobPassphrase);
+    const bobPrimaryKey = bob.primaryKey;
+    const bobUser = bob.users[0];
+
+    // Self Certificate is valid
+    expect(await bobUser.selfCertifications[0].verify(
+      bobPrimaryKey, { userid: bobUser.userId, key: bobPrimaryKey }
+    ));
+    expect(await bobUser.verifyCertificate(
+      bobPrimaryKey, bobUser.selfCertifications[0], [bob.toPublic()]
+    )).toEqual(openpgp.enums.keyStatus.valid);
+
+    // Alice trusts Bob
+    const trustedBob = await bob.toPublic().signPrimaryUser([alice]);
+    expect(await trustedBob.users[0].otherCertifications[0].verify(
+      alicePrimaryKey, { userid: aliceUser.userId, key: bob.toPublic().primaryKey }
+    ));
+
+    // Bob trusts Alice
+    const trustedAlice = await alice.toPublic().signPrimaryUser([bob]);
+    expect(await trustedAlice.users[0].otherCertifications[0].verify(
+      bobPrimaryKey, { userid: bobUser.userId, key: alice.toPublic().primaryKey }
+    ));
+
+    // Signing message
+    const signed = await openpgp.sign({ data: 'Hello, World!', privateKeys: bob })
+    const msg = openpgp.cleartext.readArmored(signed.data);
+    // Verifying signed message
+    const msgOutput = await openpgp.verify({ message: msg, publicKeys: bob.toPublic() });
+    expect(msgOutput.signatures[0].valid);
+    // Verifying detached signature
+    const sigOutput = await openpgp.verify({
+      message: openpgp.message.fromText('Hello, World!'),
+      publicKeys: bob.toPublic(),
+      signature: openpgp.signature.readArmored(signed.data)
     });
-    // console.log('signature_buffer: ', signature_buffer);
-    let verified_signature = await g9g.verify({
-      passphrase,
-      input_buffer: signature_buffer
+    expect(sigOutput.signatures[0].valid);
+
+    // Encrypting and decrypting
+    const msgData = 'Alice wrote this, and only Bob can read it.';
+    const encrypted = await openpgp.encrypt({
+      data: msgData,
+      publicKeys: [bob.toPublic()],
+      privateKeys: [alice]
     });
-    expect(verified_signature).toBe(true);
-    // console.log('verified_signature: ', verified_signature);
+    const encryptedMsg = await openpgp.message.readArmored(encrypted.data);
+
+    // Decrypting and verifying
+    const decryptedMsg = await openpgp.decrypt({
+      message: encryptedMsg,
+      privateKeys: [bob],
+      publicKeys: [alice.toPublic()]
+    });
+    expect(decryptedMsg.data).toEqual(msgData);
+    expect(decryptedMsg.signatures[0].valid);
+
+    // Create Ethereum wallet from Bob key
+    const wallet = Wallet.fromPrivateKey(
+      new Buffer(sodium.to_hex(bob.primaryKey.params[2].data), 'hex')
+    );
+
+    // Sign message with Ethereum wallet
+    const ethMsg = 'Hello, World!';
+    const msgHash = utils.sha3(ethMsg);
+    const { v, r, s } = utils.ecsign(msgHash, wallet._privKey);
+    const pubKey = utils.ecrecover(msgHash, v, r, s);
+
+    // Validate Ethereum pubKey matches PGP pubKey
+    const publicKeyHex = sodium.to_hex(bob.primaryKey.params[1].data).substring(2);
+    expect(pubKey.toString('hex')).toEqual(publicKeyHex);
+
+    // Verify Ethereum Address
+    const addr = utils.pubToAddress(pubKey);
+    const wallet_address = '0x' + wallet.getAddress().toString('hex');
+    expect('0x' + addr.toString('hex')).toBe(wallet_address);
   });
 
   afterAll(() => {

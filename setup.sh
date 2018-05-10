@@ -13,10 +13,14 @@ echo "secret" | gpg --batch --pinentry-mode loopback --command-fd 0 -u "Alice" -
 gpg --verify ./data/doc2.sig 
 
 # Export a Public Key
+gpg --export -a "Alice" > ./data/public.key
+# Armored
 gpg --export -a "Alice" > ./data/public_key.asc
 # cat public.key
 
 # Export a Private Key
+echo "secret" | gpg --batch --pinentry-mode loopback --command-fd 0 --export-secret-key "Alice" > ./data/private.key
+# Armored
 echo "secret" | gpg --batch --pinentry-mode loopback --command-fd 0 --export-secret-key -a "Alice" > ./data/private_key.asc
 # cat private.key
 

@@ -67,14 +67,14 @@ describe('trispussizeite', () => {
     // Alice trusts Bob
     const trustedBob = await bob.toPublic().signPrimaryUser([alice]);
     expect(await trustedBob.users[0].otherCertifications[0].verify(
-      alicePrimaryKey, { userid: aliceUser.userId, key: bob.toPublic().primaryKey }
-    ));
+      alicePrimaryKey, { userid: bobUser.userId, key: bob.toPublic().primaryKey }
+    )).toBe(true);
 
     // Bob trusts Alice
     const trustedAlice = await alice.toPublic().signPrimaryUser([bob]);
     expect(await trustedAlice.users[0].otherCertifications[0].verify(
-      bobPrimaryKey, { userid: bobUser.userId, key: alice.toPublic().primaryKey }
-    ));
+      bobPrimaryKey, { userid: aliceUser.userId, key: alice.toPublic().primaryKey }
+    )).toBe(true);
 
     // Signing message
     const signed = await openpgp.sign({ data: 'Hello, World!', privateKeys: bob })
@@ -148,13 +148,13 @@ describe('trispussizeite', () => {
 
     // Verify that Bob trusts Alice
     expect(await bobPub.users[0].otherCertifications[0].verify(
-      alicePub.primaryKey, { userid: alicePub.users[0].userId, key: bobPub.primaryKey }
-    ));
+      alicePub.primaryKey, { userid: bobPub.users[0].userId, key: bobPub.primaryKey }
+    )).toBe(true);
 
     // Verify that Alice trusts Bob
     expect(await alicePub.users[0].otherCertifications[0].verify(
-      bobPub.primaryKey, { userid: bobPub.users[0].userId, key: alicePub.primaryKey }
-    ));
+      bobPub.primaryKey, { userid: alicePub.users[0].userId, key: alicePub.primaryKey }
+    )).toBe(true);
   });
 
   afterAll(() => {

@@ -5,7 +5,6 @@ import path from 'path';
 const openpgp = require('openpgp');
 import Promise from 'bluebird';
 const fs = Promise.promisifyAll(require('fs'));
-const elliptic = openpgp.crypto.publicKey.elliptic;
 
 const { Console } = require('console');
 global.console = new Console(process.stderr, process.stderr);
@@ -128,6 +127,34 @@ describe('trispussizeite', () => {
     const addr = utils.pubToAddress(pubKey);
     const wallet_address = '0x' + wallet.getAddress().toString('hex');
     expect('0x' + addr.toString('hex')).toBe(wallet_address);
+
+    // Verifying from armored public keys
+    
+    // Reading Bob from plaintext
+    const bobPub = openpgp.key.readArmored(
+      trustedBob.armor()
+    ).keys[0];
+
+    // Reading Alice from plaintext
+    const alicePub = openpgp.key.readArmored(
+      trustedAlice.armor()
+    ).keys[0];
+
+    // Verify Bob email
+    expect(bobPub.users[0].userId.userid.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/gi)[0]).toEqual('bob@example.com');
+
+    // Verify Alice email
+    expect(alicePub.users[0].userId.userid.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/gi)[0]).toEqual('alice@example.com');
+
+    // Verify that Bob trusts Alice
+    expect(await bobPub.users[0].otherCertifications[0].verify(
+      alicePub.primaryKey, { userid: alicePub.users[0].userId, key: bobPub.primaryKey }
+    ));
+
+    // Verify that Alice trusts Bob
+    expect(await alicePub.users[0].otherCertifications[0].verify(
+      bobPub.primaryKey, { userid: bobPub.users[0].userId, key: alicePub.primaryKey }
+    ));
   });
 
   afterAll(() => {
